@@ -47,7 +47,7 @@ export function Sidebar({ isOpen, onClose, isMobile, notificationsCount = 0 }: S
             </div>
             <h1 className="text-2xl font-[1000] tracking-tighter italic leading-none">
               <span className="text-white">WORK</span><span className="text-yellow-500">OUT</span>
-              <span className="text-yellow-500 text-[10px] block font-bold tracking-wider mt-1 not-italic">CHAPTER 2</span>
+              <span className="text-yellow-500 text-[10px] block font-bold tracking-wider mt-1 not-italic">CHAPTER 1</span>
             </h1>
           </div>
           <p className="text-[8px] font-black uppercase tracking-[0.35em] text-yellow-500/60">Management Console</p>

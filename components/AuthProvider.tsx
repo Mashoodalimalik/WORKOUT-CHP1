@@ -78,8 +78,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             <div className="w-16 h-16 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/20 shadow-[0_0_20px_1px_rgba(16,185,129,0.3)]">
                <Lock className="w-8 h-8" />
             </div>
-            <CardTitle className="text-3xl font-bold tracking-tight">WORKOUT CHAPTER 2</CardTitle>
-            <CardDescription>Authentication required for Workout Chapter 2</CardDescription>
+            <CardTitle className="text-3xl font-bold tracking-tight">WORKOUT CHAPTER 1</CardTitle>
+            <CardDescription>Authentication required for Workout Chapter 1</CardDescription>
          </CardHeader>
          <CardContent>
             {isLoadingCredentials ? (

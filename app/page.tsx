@@ -425,7 +425,7 @@ export default function Dashboard() {
               <h1 className="text-5xl font-[1000] tracking-tighter italic leading-none">
                 <span className="text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.3)]">WORK</span>
                 <span className="text-yellow-500 drop-shadow-[0_2px_10px_rgba(234,179,8,0.5)]">OUT</span>
-                <span className="text-yellow-500 text-sm block font-bold tracking-[0.25em] mt-1 not-italic">CHAPTER 2</span>
+                <span className="text-yellow-500 text-sm block font-bold tracking-[0.25em] mt-1 not-italic">CHAPTER 1</span>
               </h1>
               <div className="h-1 w-full bg-gradient-to-r from-yellow-500 to-transparent mt-1" />
               <p className="text-[10px] font-black uppercase tracking-[0.5em] text-yellow-500/80 mt-1">Live Attendance Command Center</p>

@@ -8,7 +8,7 @@ import { LayoutWrapper } from "@/components/LayoutWrapper";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "WORKOUT CHAPTER 2 | Gym Management",
+  title: "WORKOUT CHAPTER 1 | Gym Management",
   description: "Dynamic gym attendance and management system",
 };
 

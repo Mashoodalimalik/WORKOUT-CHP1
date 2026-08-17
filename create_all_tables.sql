@@ -1,5 +1,5 @@
 -- ============================================================
--- FULL DATABASE SETUP SCRIPT FOR WORKOUT CHAPTER 2
+-- FULL DATABASE SETUP SCRIPT FOR WORKOUT CHAPTER 1
 -- Run this ONCE in Supabase SQL Editor to create all tables
 -- ============================================================
 

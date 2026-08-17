@@ -1,5 +1,5 @@
 -- ============================================================
--- WORKOUT CHAPTER 2 — FRESH START DATA CLEAR SCRIPT
+-- WORKOUT CHAPTER 1 — FRESH START DATA CLEAR SCRIPT
 -- Run this in the Supabase SQL Editor to wipe all gym data
 -- while keeping table structure, packages, and settings intact.
 --

@@ -1,4 +1,4 @@
--- SQL MIGRATION SCRIPT FOR WORKOUT CHAPTER 2
+-- SQL MIGRATION SCRIPT FOR WORKOUT CHAPTER 1
 -- RUN THIS IN YOUR SUPABASE SQL EDITOR TO SETUP DYNAMIC SETTINGS
 
 -- 1. Create the gym_packages table to hold all plans, add-ons, and personal training options
