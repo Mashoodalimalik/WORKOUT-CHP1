@@ -1326,96 +1326,96 @@ export const dbService = {
 
       // STRICT MODE: Supabase is the single source of truth
       const { data: settingsData, error: settingsError } = await supabase.from('system_settings').select('*');
-      if (!settingsError && settingsData) {
+      if (!settingsError && settingsData && settingsData.length > 0) {
         settingsData.forEach(row => {
           if (row.key === 'admission_fee') cachedSettings.admissionFee = Number(row.value);
-          if (row.key === 'security') {
-            cachedSettings.adminUser = row.value.username;
-            cachedSettings.adminPass = row.value.password;
+          if (row.key === 'security' && row.value) {
+            cachedSettings.adminUser = row.value.username || cachedSettings.adminUser;
+            cachedSettings.adminPass = row.value.password || cachedSettings.adminPass;
           }
-          if (row.key === 'zk_config') {
-            cachedSettings.zkIP = row.value.ip;
-            cachedSettings.zkPort = String(row.value.port);
+          if (row.key === 'zk_config' && row.value) {
+            cachedSettings.zkIP = row.value.ip || cachedSettings.zkIP;
+            cachedSettings.zkPort = String(row.value.port || cachedSettings.zkPort);
             cachedSettings.zkAutoSync = !!row.value.autoSync;
           }
         });
       }
 
       const { data: pkgsData, error: pkgsError } = await supabase.from('gym_packages').select('*');
-      if (!pkgsError && pkgsData && pkgsData.length > 0) {
-        cachedPackages = pkgsData.filter((p: any) => p.type === 'gym');
-        cachedAddons = pkgsData.filter((p: any) => p.type === 'addon');
-        cachedPTPackages = pkgsData.filter((p: any) => p.type === 'pt');
-      } else {
-        // Supabase returned nothing — seed with defaults
-        cachedPackages = [...DEFAULT_PACKAGES];
-        cachedAddons = [...DEFAULT_ADDONS];
-        cachedPTPackages = [...DEFAULT_PT_PACKAGES];
-        try {
-          const allSeed = [
-            ...cachedPackages.map((p: any) => ({ ...p, type: 'gym' })),
-            ...cachedAddons.map((a: any) => ({ ...a, duration: a.duration ?? 1, type: 'addon' })),
-            ...cachedPTPackages.map((pt: any) => ({ ...pt, duration: pt.duration ?? 1, type: 'pt' }))
-          ];
-          await supabase.from('gym_packages').upsert(allSeed, { onConflict: 'id' });
-          await supabase.from('system_settings').upsert([
-            { key: 'admission_fee', value: cachedSettings.admissionFee },
-            { key: 'zk_config', value: { ip: cachedSettings.zkIP, port: Number(cachedSettings.zkPort), autoSync: cachedSettings.zkAutoSync } },
-            { key: 'security', value: { username: cachedSettings.adminUser, password: cachedSettings.adminPass } }
-          ], { onConflict: 'key' });
-        } catch (seedErr) {
-          console.warn("Could not seed Supabase tables", seedErr);
+      if (!pkgsError && pkgsData) {
+        if (pkgsData.length > 0) {
+          cachedPackages = pkgsData.filter((p: any) => p.type === 'gym');
+          cachedAddons = pkgsData.filter((p: any) => p.type === 'addon');
+          cachedPTPackages = pkgsData.filter((p: any) => p.type === 'pt');
+        } else {
+          // Table exists but is currently empty — seed with defaults once
+          cachedPackages = [...DEFAULT_PACKAGES];
+          cachedAddons = [...DEFAULT_ADDONS];
+          cachedPTPackages = [...DEFAULT_PT_PACKAGES];
+          try {
+            const allSeed = [
+              ...cachedPackages.map((p: any) => ({ id: p.id, name: p.name, price: Number(p.price) || 0, duration: Number(p.duration) || 1, type: 'gym' })),
+              ...cachedAddons.map((a: any) => ({ id: a.id, name: a.name, price: Number(a.price) || 0, duration: Number(a.duration) || 1, type: 'addon' })),
+              ...cachedPTPackages.map((pt: any) => ({ id: pt.id, name: pt.name, price: Number(pt.price) || 0, duration: Number(pt.duration) || 1, type: 'pt' }))
+            ];
+            await supabase.from('gym_packages').upsert(allSeed, { onConflict: 'id' });
+          } catch (seedErr) {
+            console.warn("Could not seed gym_packages table", seedErr);
+          }
         }
+      } else if (pkgsError) {
+        console.warn("Could not fetch gym_packages from Supabase (table may not exist yet):", pkgsError.message);
       }
     } catch (e) {
-      // Supabase unreachable — fall back to in-memory defaults
-      console.warn("Could not load settings from Supabase, using in-memory defaults", e);
-      cachedSettings = { ...DEFAULT_SETTINGS };
-      cachedPackages = [...DEFAULT_PACKAGES];
-      cachedAddons = [...DEFAULT_ADDONS];
-      cachedPTPackages = [...DEFAULT_PT_PACKAGES ];
+      console.warn("Could not load settings from Supabase, using current cache", e);
     }
   },
 
   saveSettings: async (settings: any) => {
     cachedSettings = { ...cachedSettings, ...settings };
     if (!isDummy) {
-      try {
-        await supabase.from('system_settings').upsert({ key: 'admission_fee', value: cachedSettings.admissionFee });
-        await supabase.from('system_settings').upsert({ 
-          key: 'security', 
-          value: { username: cachedSettings.adminUser, password: cachedSettings.adminPass } 
-        });
-        await supabase.from('system_settings').upsert({ 
-          key: 'zk_config', 
-          value: { ip: cachedSettings.zkIP, port: Number(cachedSettings.zkPort), autoSync: cachedSettings.zkAutoSync } 
-        });
-      } catch (e) {
-        console.error("Failed to save system settings to Supabase", e);
-      }
+      const res1 = await supabase.from('system_settings').upsert({ key: 'admission_fee', value: cachedSettings.admissionFee });
+      if (res1.error) throw new Error(`Failed to save admission fee: ${res1.error.message}`);
+
+      const res2 = await supabase.from('system_settings').upsert({ 
+        key: 'security', 
+        value: { username: cachedSettings.adminUser, password: cachedSettings.adminPass } 
+      });
+      if (res2.error) throw new Error(`Failed to save security settings: ${res2.error.message}`);
+
+      const res3 = await supabase.from('system_settings').upsert({ 
+        key: 'zk_config', 
+        value: { ip: cachedSettings.zkIP, port: Number(cachedSettings.zkPort), autoSync: cachedSettings.zkAutoSync } 
+      });
+      if (res3.error) throw new Error(`Failed to save ZK config: ${res3.error.message}`);
     }
   },
 
   savePackages: async (packages: any[]) => {
     cachedPackages = packages;
     if (!isDummy) {
-      try {
-        // Get current IDs in Supabase for this type, then delete ones no longer in the list
-        const { data: existing } = await supabase.from('gym_packages').select('id').eq('type', 'gym');
-        const existingIds = (existing || []).map((r: any) => r.id);
-        const newIds = packages.map(p => p.id);
-        const toDelete = existingIds.filter((id: string) => !newIds.includes(id));
-        if (toDelete.length > 0) {
-          await supabase.from('gym_packages').delete().in('id', toDelete);
-        }
-        if (packages.length > 0) {
-          await supabase.from('gym_packages').upsert(
-            packages.map(p => ({ ...p, type: 'gym' })),
-            { onConflict: 'id' }
-          );
-        }
-      } catch (e) {
-        console.error("Failed to save gym packages to Supabase", e);
+      const { data: existing, error: selErr } = await supabase.from('gym_packages').select('id').eq('type', 'gym');
+      if (selErr) throw new Error(`Failed to check existing gym packages: ${selErr.message}. Make sure table 'gym_packages' exists in Supabase.`);
+      
+      const existingIds = (existing || []).map((r: any) => r.id);
+      const newIds = packages.map(p => p.id);
+      const toDelete = existingIds.filter((id: string) => !newIds.includes(id));
+      
+      if (toDelete.length > 0) {
+        const { error: delErr } = await supabase.from('gym_packages').delete().in('id', toDelete);
+        if (delErr) throw new Error(`Failed to delete removed gym packages: ${delErr.message}`);
+      }
+      
+      if (packages.length > 0) {
+        const cleanPayload = packages.map(p => ({
+          id: p.id,
+          name: p.name,
+          price: Number(p.price) || 0,
+          duration: Number(p.duration) || 1,
+          type: 'gym'
+        }));
+        const { error: upErr } = await supabase.from('gym_packages').upsert(cleanPayload, { onConflict: 'id' });
+        if (upErr) throw new Error(`Failed to save gym packages to Supabase: ${upErr.message}`);
       }
     }
   },
@@ -1423,22 +1423,28 @@ export const dbService = {
   saveAddons: async (addons: any[]) => {
     cachedAddons = addons;
     if (!isDummy) {
-      try {
-        const { data: existing } = await supabase.from('gym_packages').select('id').eq('type', 'addon');
-        const existingIds = (existing || []).map((r: any) => r.id);
-        const newIds = addons.map(a => a.id);
-        const toDelete = existingIds.filter((id: string) => !newIds.includes(id));
-        if (toDelete.length > 0) {
-          await supabase.from('gym_packages').delete().in('id', toDelete);
-        }
-        if (addons.length > 0) {
-          await supabase.from('gym_packages').upsert(
-            addons.map(a => ({ ...a, duration: a.duration ?? 1, type: 'addon' })),
-            { onConflict: 'id' }
-          );
-        }
-      } catch (e) {
-        console.error("Failed to save addons to Supabase", e);
+      const { data: existing, error: selErr } = await supabase.from('gym_packages').select('id').eq('type', 'addon');
+      if (selErr) throw new Error(`Failed to check existing add-ons: ${selErr.message}. Make sure table 'gym_packages' exists in Supabase.`);
+      
+      const existingIds = (existing || []).map((r: any) => r.id);
+      const newIds = addons.map(a => a.id);
+      const toDelete = existingIds.filter((id: string) => !newIds.includes(id));
+      
+      if (toDelete.length > 0) {
+        const { error: delErr } = await supabase.from('gym_packages').delete().in('id', toDelete);
+        if (delErr) throw new Error(`Failed to delete removed add-ons: ${delErr.message}`);
+      }
+      
+      if (addons.length > 0) {
+        const cleanPayload = addons.map(a => ({
+          id: a.id,
+          name: a.name,
+          price: Number(a.price) || 0,
+          duration: Number(a.duration) || 1,
+          type: 'addon'
+        }));
+        const { error: upErr } = await supabase.from('gym_packages').upsert(cleanPayload, { onConflict: 'id' });
+        if (upErr) throw new Error(`Failed to save add-ons to Supabase: ${upErr.message}`);
       }
     }
   },
@@ -1446,23 +1452,30 @@ export const dbService = {
   savePTPackages: async (ptPackages: any[]) => {
     cachedPTPackages = ptPackages;
     if (!isDummy) {
-      try {
-        const { data: existing } = await supabase.from('gym_packages').select('id').eq('type', 'pt');
-        const existingIds = (existing || []).map((r: any) => r.id);
-        const newIds = ptPackages.map(p => p.id);
-        const toDelete = existingIds.filter((id: string) => !newIds.includes(id));
-        if (toDelete.length > 0) {
-          await supabase.from('gym_packages').delete().in('id', toDelete);
-        }
-        if (ptPackages.length > 0) {
-          await supabase.from('gym_packages').upsert(
-            ptPackages.map(pt => ({ ...pt, duration: pt.duration ?? 1, type: 'pt' })),
-            { onConflict: 'id' }
-          );
-        }
-      } catch (e) {
-        console.error("Failed to save PT packages to Supabase", e);
+      const { data: existing, error: selErr } = await supabase.from('gym_packages').select('id').eq('type', 'pt');
+      if (selErr) throw new Error(`Failed to check existing PT packages: ${selErr.message}. Make sure table 'gym_packages' exists in Supabase.`);
+      
+      const existingIds = (existing || []).map((r: any) => r.id);
+      const newIds = ptPackages.map(pt => pt.id);
+      const toDelete = existingIds.filter((id: string) => !newIds.includes(id));
+      
+      if (toDelete.length > 0) {
+        const { error: delErr } = await supabase.from('gym_packages').delete().in('id', toDelete);
+        if (delErr) throw new Error(`Failed to delete removed PT packages: ${delErr.message}`);
+      }
+      
+      if (ptPackages.length > 0) {
+        const cleanPayload = ptPackages.map(pt => ({
+          id: pt.id,
+          name: pt.name,
+          price: Number(pt.price) || 0,
+          duration: Number(pt.duration) || 1,
+          type: 'pt'
+        }));
+        const { error: upErr } = await supabase.from('gym_packages').upsert(cleanPayload, { onConflict: 'id' });
+        if (upErr) throw new Error(`Failed to save PT packages to Supabase: ${upErr.message}`);
       }
     }
+  }
   }
 }
