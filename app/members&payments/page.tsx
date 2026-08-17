@@ -399,7 +399,7 @@ export default function MembersAndPaymentsPage() {
           <div className="flex flex-col">
             <h1 className="text-4xl font-[1000] tracking-tighter italic leading-none flex items-center">
               <span className="text-white">WORK</span><span className="text-yellow-500">OUT</span>
-              <span className="text-yellow-500 text-xs font-bold tracking-wider ml-2 bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/20">CH. 2</span>
+              <span className="text-yellow-500 text-xs font-bold tracking-wider ml-2 bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/20">CH. 1</span>
               <span className="mx-3 text-muted-foreground/30 font-light not-italic">|</span>
               <span className="text-white/40 text-2xl uppercase tracking-tighter">Members & Payments</span>
             </h1>
