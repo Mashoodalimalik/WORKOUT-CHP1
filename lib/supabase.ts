@@ -492,7 +492,7 @@ export const dbService = {
 
     if (!isDummy) {
       // Let Supabase handle ID generation for UUID fields
-      const { error } = await supabase.from('members').insert([{
+      const insertPayload: Record<string, any> = {
         serial_number: serialNumber,
         name: payload.name,
         phone: payload.phone || '',
@@ -514,7 +514,17 @@ export const dbService = {
         fingerprint_template: payload.bio,
         zk_id: payload.zk_id,
         last_visit: toLocalIsoWithOffset()
-      }]);
+      };
+
+      let { error } = await supabase.from('members').insert([insertPayload]);
+
+      // If database table is missing 'is_premium' column in schema cache, retry without it
+      if (error && (error.message?.includes('is_premium') || error.code === 'PGRST204')) {
+        console.warn("Supabase members table missing 'is_premium' column. Retrying insert without 'is_premium'.");
+        delete insertPayload.is_premium;
+        const retry = await supabase.from('members').insert([insertPayload]);
+        error = retry.error;
+      }
 
       if (error) throw error;
 
@@ -1106,7 +1116,13 @@ export const dbService = {
     }
 
     if (!isDummy) {
-      const { error } = await supabase.from('members').update(updatePayload).eq('id', memberId);
+      let { error } = await supabase.from('members').update(updatePayload).eq('id', memberId);
+      if (error && (error.message?.includes('is_premium') || error.code === 'PGRST204')) {
+        console.warn("Supabase members table missing 'is_premium' column. Retrying update without 'is_premium'.");
+        delete updatePayload.is_premium;
+        const retry = await supabase.from('members').update(updatePayload).eq('id', memberId);
+        error = retry.error;
+      }
       if (error) throw error;
       const cache = getCache();
       if (cache?.isReady()) {

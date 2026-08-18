@@ -54,44 +54,38 @@ export async function POST(req: Request) {
       normalizedTimestamp,
     });
 
-    // Look up member by fingerprint_template first, then by zk_id.
-    // Using separate .eq() queries instead of .or() to avoid PostgREST
-    // quoting ambiguity that caused false "member not found" results.
+    // Helper to query member by column with fallback to select('*') if explicit column selection fails
+    const findMember = async (columnName: string, val: string) => {
+      let { data, error } = await supabase
+        .from('members')
+        .select(SCANNER_MEMBER_COLS)
+        .eq(columnName, val)
+        .limit(1);
+
+      if (error || !data) {
+        const retry = await supabase
+          .from('members')
+          .select('*')
+          .eq(columnName, val)
+          .limit(1);
+        data = retry.data;
+      }
+      return data?.[0] ?? null;
+    };
+
     let member: any = null;
 
     if (normalizedUserId) {
-      const { data: byFingerprint } = await supabase
-        .from('members')
-        .select(SCANNER_MEMBER_COLS)
-        .eq('fingerprint_template', normalizedUserId)
-        .limit(1);
-      member = byFingerprint?.[0] ?? null;
-
+      member = await findMember('fingerprint_template', normalizedUserId);
       if (!member) {
-        const { data: byZkId } = await supabase
-          .from('members')
-          .select(SCANNER_MEMBER_COLS)
-          .eq('zk_id', normalizedUserId)
-          .limit(1);
-        member = byZkId?.[0] ?? null;
+        member = await findMember('zk_id', normalizedUserId);
       }
     }
 
     if (!member && fallbackUid) {
-      const { data: byFingerprint2 } = await supabase
-        .from('members')
-        .select(SCANNER_MEMBER_COLS)
-        .eq('fingerprint_template', fallbackUid)
-        .limit(1);
-      member = byFingerprint2?.[0] ?? null;
-
+      member = await findMember('fingerprint_template', fallbackUid);
       if (!member) {
-        const { data: byZkId2 } = await supabase
-          .from('members')
-          .select(SCANNER_MEMBER_COLS)
-          .eq('zk_id', fallbackUid)
-          .limit(1);
-        member = byZkId2?.[0] ?? null;
+        member = await findMember('zk_id', fallbackUid);
       }
     }
 

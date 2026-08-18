@@ -888,7 +888,9 @@ export default function AdmissionsPage() {
 
                   {error && (
                     <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg animate-in shake-in-radius-2 duration-300">
-                      <p className="text-[10px] text-red-500 font-black uppercase tracking-wider mb-1">Hardware Conflict Detected</p>
+                      <p className="text-[10px] text-red-500 font-black uppercase tracking-wider mb-1">
+                        {/hardware|bridge|scanner|device|finger/i.test(error) ? "Hardware Conflict Detected" : "Admission Error"}
+                      </p>
                       <p className="text-xs text-red-400 leading-tight">{error}</p>
                     </div>
                   )}

@@ -81,6 +81,7 @@ let trainers: Map<string, CachedTrainer> = new Map();
 
 /** zk_id OR fingerprint_template → member.id for instant scanner lookups */
 let scannerIndex: Map<string, string> = new Map();
+let numericScannerIndex: Map<number, string> = new Map();
 
 let recentLogs: CachedAttendanceLog[] = [];
 
@@ -107,30 +108,38 @@ function bump() {
   });
 }
 
-const indexKey = (val: unknown): string[] => {
-  if (val == null) return [];
-  const str = String(val).trim();
-  if (!str) return [];
-  const keys = [str];
-
-  if (/^\d+$/.test(str)) {
-    const num = Number.parseInt(str, 10);
-    const unpadded = String(num);
-    const padded3 = unpadded.padStart(3, '0');
-    const padded4 = unpadded.padStart(4, '0');
-    if (!keys.includes(unpadded)) keys.push(unpadded);
-    if (!keys.includes(padded3)) keys.push(padded3);
-    if (!keys.includes(padded4)) keys.push(padded4);
-  }
-  return keys;
-};
-
 function rebuildScannerIndex() {
   scannerIndex.clear();
+  numericScannerIndex.clear();
+
   members.forEach((m, id) => {
-    indexKey(m.zk_id).forEach(k => scannerIndex.set(k, id));
-    indexKey(m.fingerprint_template).forEach(k => scannerIndex.set(k, id));
-    indexKey(m.serial_number).forEach(k => scannerIndex.set(k, id));
+    // 1. Index zk_id (hardware device user ID)
+    const zkStr = m.zk_id != null ? String(m.zk_id).trim() : "";
+    if (zkStr) {
+      if (!scannerIndex.has(zkStr)) {
+        scannerIndex.set(zkStr, id);
+      }
+      if (/^\d+$/.test(zkStr)) {
+        const num = Number.parseInt(zkStr, 10);
+        if (!numericScannerIndex.has(num)) {
+          numericScannerIndex.set(num, id);
+        }
+      }
+    }
+
+    // 2. Index fingerprint_template (biometric template identifier)
+    const fpStr = m.fingerprint_template != null ? String(m.fingerprint_template).trim() : "";
+    if (fpStr) {
+      if (!scannerIndex.has(fpStr)) {
+        scannerIndex.set(fpStr, id);
+      }
+      if (/^\d+$/.test(fpStr)) {
+        const num = Number.parseInt(fpStr, 10);
+        if (!numericScannerIndex.has(num)) {
+          numericScannerIndex.set(num, id);
+        }
+      }
+    }
   });
 }
 
@@ -364,6 +373,7 @@ export const memberCache = {
 
   /**
    * Instant scanner lookup: checks zk_id first, then fingerprint_template.
+   * Excludes serial_number (which is member admission serial number, not a scanner ID).
    * This is the hot path — must be O(1).
    */
   getMemberByScannerId(identifier: string): CachedMember | null {
@@ -371,33 +381,20 @@ export const memberCache = {
     const str = String(identifier).trim();
     if (!str) return null;
 
-    const keys = indexKey(str);
-    for (const k of keys) {
-      const id = scannerIndex.get(k);
-      if (id) {
-        const found = members.get(id);
-        if (found) return found;
-      }
+    // Priority 1: Exact string match on zk_id or fingerprint_template (O(1))
+    const exactId = scannerIndex.get(str);
+    if (exactId) {
+      const found = members.get(exactId);
+      if (found) return found;
     }
 
-    // Linear search fallback across cached members
-    const parsedNum = /^\d+$/.test(str) ? Number.parseInt(str, 10) : null;
-    const allMembers = Array.from(members.values());
-    for (const m of allMembers) {
-      const mZk = String(m.zk_id ?? "").trim();
-      const mFp = String(m.fingerprint_template ?? "").trim();
-      const mSerial = String(m.serial_number ?? "").trim();
-
-      if (mZk === str || mFp === str || mSerial === str) return m;
-
-      if (parsedNum !== null && parsedNum > 0) {
-        if (
-          (mZk && Number.parseInt(mZk, 10) === parsedNum) ||
-          (mFp && Number.parseInt(mFp, 10) === parsedNum) ||
-          (mSerial && Number.parseInt(mSerial, 10) === parsedNum)
-        ) {
-          return m;
-        }
+    // Priority 2: Numeric equivalence match (e.g. "5" vs "005" vs "0005") (O(1))
+    if (/^\d+$/.test(str)) {
+      const num = Number.parseInt(str, 10);
+      const numId = numericScannerIndex.get(num);
+      if (numId) {
+        const found = members.get(numId);
+        if (found) return found;
       }
     }
 
@@ -554,6 +551,7 @@ export const memberCache = {
     members.clear();
     trainers.clear();
     scannerIndex.clear();
+    numericScannerIndex.clear();
     recentLogs = [];
     initialized = false;
     initializing = null;
