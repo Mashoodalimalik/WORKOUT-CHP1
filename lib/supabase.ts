@@ -240,7 +240,15 @@ const getRecurringTrainerFee = (member: any) => {
 
 const getSafeDate = (input: unknown, fallback: Date = new Date()) => {
   if (input == null || input === '') return fallback;
-  const parsed = new Date(String(input));
+  const str = String(input).trim();
+  const ymdMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymdMatch) {
+    const year = parseInt(ymdMatch[1], 10);
+    const month = parseInt(ymdMatch[2], 10) - 1;
+    const day = parseInt(ymdMatch[3], 10);
+    return new Date(year, month, day, 0, 0, 0, 0);
+  }
+  const parsed = new Date(str);
   if (Number.isNaN(parsed.getTime())) return fallback;
   return parsed;
 };
@@ -290,13 +298,18 @@ export const getMemberPaymentSnapshot = (member: any) => {
   today.setHours(0,0,0,0);
 
   const gymPackageDuration = getGymPackageDurationMonths(member?.package_type);
-  const monthsElapsed = calculateMonthsElapsed(startDate, today);
+  const gymCycleDays = gymPackageDuration >= 1200 ? 99999 : (gymPackageDuration * 30);
+  const trainerCycleDays = 30;
 
-  const rawGymCyclesElapsed = gymPackageDuration > 0
-    ? Math.floor(monthsElapsed / gymPackageDuration)
-    : 0;
+  // Compute exact elapsed days between local start date and today
+  const diffMs = Math.max(0, today.getTime() - startDate.getTime());
+  const daysElapsed = Math.floor(diffMs / DAY_IN_MS);
 
-  const rawTrainerCyclesElapsed = monthsElapsed; 
+  // Each monthly billing cycle is 30 days.
+  // A paid member remains in Cycle 1 for days 0 to 29 (30 full days).
+  // Cycle 2 begins only after 30 full days have elapsed (i.e. daysElapsed >= gymCycleDays).
+  const rawGymCyclesElapsed = gymCycleDays > 0 ? Math.floor(daysElapsed / gymCycleDays) : 0;
+  const rawTrainerCyclesElapsed = hasTrainerPackage(member) ? Math.floor(daysElapsed / trainerCycleDays) : 0;
 
   const bakedGymCycles = Number(member?.baked_gym_cycles) || 0;
   const bakedTrainerCycles = Number(member?.baked_trainer_cycles) || 0;
@@ -328,12 +341,8 @@ export const getMemberPaymentSnapshot = (member: any) => {
     }
   }
 
-  const currentCycleStart = new Date(startDate);
-  currentCycleStart.setMonth(currentCycleStart.getMonth() + rawGymCyclesElapsed * gymPackageDuration);
-  const currentCycleEnd = new Date(currentCycleStart);
-  currentCycleEnd.setMonth(currentCycleEnd.getMonth() + gymPackageDuration);
-
-  const daysSinceCycleStart = Math.floor(Math.max(0, today.getTime() - currentCycleStart.getTime()) / DAY_IN_MS);
+  const currentGymCycleStartDays = rawGymCyclesElapsed * gymCycleDays;
+  const daysSinceCycleStart = daysElapsed - currentGymCycleStartDays;
 
   const currentCyclePaid = Math.max(0, Math.min(
     totalPaid - (totalRequired - recurringTotal),
@@ -350,7 +359,7 @@ export const getMemberPaymentSnapshot = (member: any) => {
     cycleDue,
     remainingBalance,
     daysSincePayment: daysSinceCycleStart,
-    gymCycleDays: gymPackageDuration * 30,
+    gymCycleDays,
     trainerCycleDays: 30,
     isDue,
     reason,
@@ -647,7 +656,7 @@ export const dbService = {
       const paymentSnapshot = getMemberPaymentSnapshot(member);
       const basePaid = paymentSnapshot.totalPaid;
       const newPaid = basePaid + amount;
-      const totalFees = paymentSnapshot.recurringTotal;
+      const totalFees = paymentSnapshot.totalRequired;
       const newStatus = newPaid >= totalFees ? 'completed' : 'due';
       
       // Use custom date if provided, otherwise now.
@@ -656,7 +665,7 @@ export const dbService = {
         ? (customDate.includes('T') ? customDate : `${customDate}T${new Date().toISOString().split('T')[1]}`)
         : toLocalIsoWithOffset();
 
-      // Each payment resets the 30-day billing clock
+      // Update payment record in database
       await supabase.from('members').update({ 
         amount_paid: newPaid, 
         payment_status: newStatus, 
@@ -684,7 +693,7 @@ export const dbService = {
        const paymentDate = customDate || toLocalIsoWithOffset();
        
        simulatedMembers[idx].amount_paid = paymentSnapshot.totalPaid + amount;
-       simulatedMembers[idx].payment_status = simulatedMembers[idx].amount_paid >= paymentSnapshot.recurringTotal ? 'completed' : 'due';
+       simulatedMembers[idx].payment_status = simulatedMembers[idx].amount_paid >= paymentSnapshot.totalRequired ? 'completed' : 'due';
        simulatedMembers[idx].payment_date = paymentDate;
 
 
