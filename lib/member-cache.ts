@@ -107,16 +107,30 @@ function bump() {
   });
 }
 
-// ─── Index Builder ───────────────────────────────────────────────────────────
+const indexKey = (val: unknown): string[] => {
+  if (val == null) return [];
+  const str = String(val).trim();
+  if (!str) return [];
+  const keys = [str];
+
+  if (/^\d+$/.test(str)) {
+    const num = Number.parseInt(str, 10);
+    const unpadded = String(num);
+    const padded3 = unpadded.padStart(3, '0');
+    const padded4 = unpadded.padStart(4, '0');
+    if (!keys.includes(unpadded)) keys.push(unpadded);
+    if (!keys.includes(padded3)) keys.push(padded3);
+    if (!keys.includes(padded4)) keys.push(padded4);
+  }
+  return keys;
+};
 
 function rebuildScannerIndex() {
   scannerIndex.clear();
   members.forEach((m, id) => {
-    const zkId = String(m.zk_id ?? "").trim();
-    if (zkId) scannerIndex.set(zkId, id);
-
-    const fp = String(m.fingerprint_template ?? "").trim();
-    if (fp) scannerIndex.set(fp, id);
+    indexKey(m.zk_id).forEach(k => scannerIndex.set(k, id));
+    indexKey(m.fingerprint_template).forEach(k => scannerIndex.set(k, id));
+    indexKey(m.serial_number).forEach(k => scannerIndex.set(k, id));
   });
 }
 
@@ -353,9 +367,41 @@ export const memberCache = {
    * This is the hot path — must be O(1).
    */
   getMemberByScannerId(identifier: string): CachedMember | null {
-    const id = scannerIndex.get(identifier);
-    if (!id) return null;
-    return members.get(id) ?? null;
+    if (!identifier) return null;
+    const str = String(identifier).trim();
+    if (!str) return null;
+
+    const keys = indexKey(str);
+    for (const k of keys) {
+      const id = scannerIndex.get(k);
+      if (id) {
+        const found = members.get(id);
+        if (found) return found;
+      }
+    }
+
+    // Linear search fallback across cached members
+    const parsedNum = /^\d+$/.test(str) ? Number.parseInt(str, 10) : null;
+    const allMembers = Array.from(members.values());
+    for (const m of allMembers) {
+      const mZk = String(m.zk_id ?? "").trim();
+      const mFp = String(m.fingerprint_template ?? "").trim();
+      const mSerial = String(m.serial_number ?? "").trim();
+
+      if (mZk === str || mFp === str || mSerial === str) return m;
+
+      if (parsedNum !== null && parsedNum > 0) {
+        if (
+          (mZk && Number.parseInt(mZk, 10) === parsedNum) ||
+          (mFp && Number.parseInt(mFp, 10) === parsedNum) ||
+          (mSerial && Number.parseInt(mSerial, 10) === parsedNum)
+        ) {
+          return m;
+        }
+      }
+    }
+
+    return null;
   },
 
   getAllTrainers(): CachedTrainer[] {

@@ -71,18 +71,23 @@ export function GlobalPaymentAlert() {
 
     console.log('[GlobalPaymentAlert] 🚨 Denied scan detected! Triggering alert for:', lastEvent.member?.name);
 
+    const isUnregistered = lastEvent.duesInfo == null && lastEvent.member?.id == null;
+    const defaultReason = isUnregistered ? "Unregistered Scanner ID" : (lastEvent.duesInfo ? "Outstanding Balance" : "Cycle Expired / Insufficient Balance");
+
     setActiveAlert({
       key,
       memberName: lastEvent.member?.name || "Unknown Identity",
       duesAmount: lastEvent.duesInfo?.balance,
       daysSincePayment: lastEvent.duesInfo?.days,
-      reason: lastEvent.notes || (lastEvent.duesInfo ? "Outstanding Balance" : "Unregistered or Blocked"),
+      reason: lastEvent.notes || defaultReason,
     });
 
     playTripleBeep();
   }, [lastEvent]);
 
   if (!activeAlert) return null;
+
+  const isUnregisteredAlert = activeAlert.duesAmount == null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/90 backdrop-blur-md animate-in fade-in duration-300">
@@ -95,7 +100,7 @@ export function GlobalPaymentAlert() {
             <div>
               <CardTitle className="text-xl italic font-black">ACCESS DENIED</CardTitle>
               <CardDescription className="text-red-100 uppercase text-[10px] font-bold tracking-[0.2em]">
-                Security Alert - {activeAlert.reason}
+                Security Alert - {isUnregisteredAlert ? "Unregistered Scanner ID" : activeAlert.reason}
               </CardDescription>
             </div>
           </div>
@@ -103,7 +108,9 @@ export function GlobalPaymentAlert() {
         <CardContent className="p-8 text-center space-y-6">
           <div>
             <h3 className="text-3xl font-black text-foreground italic">{activeAlert.memberName}</h3>
-            <p className="text-red-500 font-bold uppercase tracking-[0.3em] text-xs mt-2 italic shadow-red-500">{activeAlert.reason}</p>
+            <p className="text-red-500 font-bold uppercase tracking-[0.3em] text-xs mt-2 italic shadow-red-500">
+              {isUnregisteredAlert ? "Unregistered Scanner ID" : activeAlert.reason}
+            </p>
           </div>
 
           {activeAlert.duesAmount != null ? (
@@ -121,7 +128,9 @@ export function GlobalPaymentAlert() {
             </div>
           ) : (
             <div className="p-6 rounded-xl bg-red-500/5 border border-red-500/20">
-               <p className="text-sm text-red-400 font-bold italic tracking-wider">THIS ID IS NOT REGISTERED IN THE SYSTEM OR ATTENDANCE IS RESTRICTED.</p>
+               <p className="text-sm text-red-400 font-bold italic tracking-wider">
+                 THIS SCANNER ID IS NOT MAPPED TO ANY MEMBER IN THE SYSTEM. PLEASE ASSIGN THIS ID IN ID MAPPING / EDIT PROFILE.
+               </p>
             </div>
           )}
 
