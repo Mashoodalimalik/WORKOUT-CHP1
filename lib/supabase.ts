@@ -216,15 +216,7 @@ const getRecurringGymFee = (member: any) => {
     return storedGymFee;
   }
 
-  if (storedGymFee === expectedGymFee + 1000) {
-    return expectedGymFee;
-  }
-
-  if (storedGymFee === 0 && expectedGymFee > 0) {
-    return expectedGymFee;
-  }
-
-  return storedGymFee;
+  return expectedGymFee;
 };
 
 const getRecurringTrainerFee = (member: any) => {
@@ -1099,18 +1091,32 @@ export const dbService = {
   },
 
   updateMember: async (memberId: string, payload: any) => {
+    let updatePayload = { ...payload };
+    if (payload.package_type !== undefined || payload.has_cardio !== undefined) {
+      const cache = getCache();
+      const existing = isDummy
+        ? simulatedMembers.find(m => m.id === memberId)
+        : (cache?.isReady() ? cache.getMemberById(memberId) : null);
+      const pkgType = payload.package_type !== undefined ? payload.package_type : existing?.package_type;
+      const hasCardio = payload.has_cardio !== undefined ? payload.has_cardio : existing?.has_cardio;
+      const expected = getPackageExpectedGymFee(pkgType, hasCardio);
+      if (expected != null && expected > 0 && payload.gym_fees === undefined) {
+        updatePayload.gym_fees = expected;
+      }
+    }
+
     if (!isDummy) {
-      const { error } = await supabase.from('members').update(payload).eq('id', memberId);
+      const { error } = await supabase.from('members').update(updatePayload).eq('id', memberId);
       if (error) throw error;
       const cache = getCache();
       if (cache?.isReady()) {
-        cache.upsertMember({ id: memberId, ...payload });
+        cache.upsertMember({ id: memberId, ...updatePayload });
       }
       return;
     }
     const idx = simulatedMembers.findIndex(m => m.id === memberId);
     if (idx !== -1) {
-      simulatedMembers[idx] = { ...simulatedMembers[idx], ...payload };
+      simulatedMembers[idx] = { ...simulatedMembers[idx], ...updatePayload };
       const cache = getCache();
       if (cache) {
         cache.upsertMember(simulatedMembers[idx]);
